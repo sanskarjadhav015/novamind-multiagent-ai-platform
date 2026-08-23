@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment Variables & Private Credentials
+.env
+.env.local
+.env.development
+.env.production
+*.env
+serviceAccountKey.json
+*.pem
+*.key
+
+# Build outputs
+dist/
+build/
+.cache/
+
+# Runtime & Temporary files
+temp/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
