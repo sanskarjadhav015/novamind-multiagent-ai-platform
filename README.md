@@ -17,9 +17,8 @@
 3. [The 8 Specialized Autonomous Agents](#-the-8-specialized-autonomous-agents)
 4. [Microservices Overview](#-microservices-overview)
 5. [Tech Stack](#-tech-stack)
-6. [Getting Started & Local Setup](#-getting-started--local-setup)
-7. [Environment Variables Guide](#-environment-variables-guide)
-8. [License & Author](#-license--author)
+6. [Environment Variables Guide](#-environment-variables-guide)
+7. [License & Author](#-license--author)
 
 ---
 
