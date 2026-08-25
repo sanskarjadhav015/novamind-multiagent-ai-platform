@@ -115,42 +115,6 @@
 - **Databases & Caching**: MongoDB (Mongoose ODM), Redis (`ioredis`), Qdrant Vector Database.
 - **Cloud, Storage & Payments**: AWS S3 (`@aws-sdk/client-s3`), Presigned URLs, Razorpay Orders API, Firebase Admin SDK, Docker.
 
----
-
-## 💻 Getting Started & Local Setup
-
-### Prerequisites:
-- **Node.js**: `v20+`
-- **Redis**: Running locally (`localhost:6379`) or Redis Cloud URI
-- **MongoDB**: Running locally (`localhost:27017`) or MongoDB Atlas URI
-
-### 1. Clone the Repository:
-```bash
-git clone https://github.com/sanskarjadhav015/novamind-multiagent-ai-platform.git
-cd novamind-multiagent-ai-platform
-```
-
-### 2. Backend Setup:
-```bash
-# Start Redis (via Docker or local service)
-docker run -d -p 6379:6379 --name novamind-redis redis:alpine
-
-# Install gateway and microservices dependencies
-cd NovaMind/backend/gateway && npm install
-cd ../services/auth && npm install
-cd ../services/chat && npm install
-cd ../services/billing && npm install
-cd ../services/agent && npm install
-```
-
-### 3. Frontend Setup:
-```bash
-cd ../../../frontend
-npm install
-npm run dev
-```
-
----
 
 ## 📜 License & Author
 
