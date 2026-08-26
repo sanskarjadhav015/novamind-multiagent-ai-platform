@@ -4,7 +4,7 @@ import MessageList from './MessageList';
 import Chatinput from './Chatinput';
 import { useDispatch, useSelector } from 'react-redux';
 import getMessages from '../features/getMessages';
-import { setArtifacts, setMessages } from '../redux/messageSlice';
+import { setActiveConversationId, setArtifacts, setMessages } from '../redux/messageSlice';
 
 /**
  * ============================================================================
@@ -20,6 +20,9 @@ function ChatArea() {
   const dispatch = useDispatch();
 
   useEffect(() => {
+    const convId = selectedConversation?._id || null;
+    dispatch(setActiveConversationId(convId));
+
     const getMesg = async () => {
       // Clear previous messages and artifacts immediately to prevent UI flashes
       dispatch(setMessages([]));
@@ -47,7 +50,7 @@ function ChatArea() {
   }, [selectedConversation?._id]);
 
   return (
-    <div className='flex-1 flex flex-col min-w-0'>
+    <div className='flex-1 flex flex-col min-w-0' style={{ background: "#f9f8f6" }}>
       <Nav />
       <MessageList />
       <Chatinput />

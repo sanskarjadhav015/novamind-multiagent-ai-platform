@@ -1,230 +1,302 @@
-import React, { useState } from "react";
-import { Check, Code2, Code2Icon, Copy, Eye, FileCode2, PanelRightClose } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Check, Code2, Code2Icon, Copy, Download, Eye, FileCode2, Maximize2,
+  Minimize2, PanelRightClose, RotateCw
+} from "lucide-react";
 import { easeInOut, motion } from "motion/react";
 import { useSelector } from "react-redux";
 import Editor from "@monaco-editor/react";
 
 /**
  * ============================================================================
- * ARTIFACT & CODE SANDBOX COMPONENT (`Artifact.jsx`)
+ * PRODUCTION-GRADE ARTIFACT & LIVE SANDBOX COMPONENT (`Artifact.jsx`)
  * ============================================================================
  * Features:
- * - Multi-file tab navigator (index.html, style.css, script.js, etc.).
- * - Embedded Microsoft Monaco Editor with syntax highlighting & dark theme.
- * - Live interactive iframe compilation sandbox (`srcDoc` + `sandbox="allow-scripts allow-modals"`).
- * - Collapsible right-hand sidebar panel with smooth motion transitions.
+ * - Real-time HTML/CSS/JS sandbox with automated CDN injection (Tailwind, FontAwesome).
+ * - Monaco Editor with vs-light theme and multi-file tab switching.
+ * - Live sandbox reload button, fullscreen preview mode, and file download.
  * ============================================================================
  */
 function Artifact() {
   const [collapsed, setCollapsed] = useState(false);
-  const { artifacts } = useSelector((state) => state.message);
+  const [fullscreen, setFullscreen] = useState(false);
+  const { artifacts } = useSelector((s) => s.message);
   const [tab, setTab] = useState("code");
   const [activeFile, setActiveFile] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  if (!artifacts || artifacts.length === 0) return null;
+  const artifact = artifacts?.[0];
+  const files = artifact?.files || [];
+  const hasFiles = files.length > 0;
 
-  const file = artifacts[0]?.files?.[activeFile];
-  const htmlFile = artifacts[0]?.files?.find((f) => f.name === "index.html");
-  const cssFile = artifacts[0]?.files?.find((f) => f.name === "style.css");
-  const jsFile = artifacts[0]?.files?.find((f) => f.name === "script.js");
+  const htmlFile = files.find((f) => f.name?.toLowerCase().endsWith(".html") || f.name === "index.html");
+  const cssFile = files.find((f) => f.name?.toLowerCase().endsWith(".css") || f.name === "style.css");
+  const jsFile = files.find((f) => f.name?.toLowerCase().endsWith(".js") || f.name === "script.js");
+  const isWebProject = Boolean(htmlFile);
 
-  const canPreview = Boolean(htmlFile);
+  // Auto-switch to preview tab when a web project arrives
+  useEffect(() => {
+    if (isWebProject) {
+      setTab("preview");
+    } else {
+      setTab("code");
+    }
+    setActiveFile(0);
+  }, [artifact?.id, isWebProject]);
 
-  // Dynamic assembly of full HTML5 document injecting CSS and JS into isolated iframe
-  const previewDoc = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-    ${cssFile?.content || ""}
-    </style>
-</head>
-<body>
-${htmlFile?.content || ""}
-<script>
-${jsFile?.content || ""}
-</script>
-</body>
-</html>`;
+  if (!artifacts || artifacts.length === 0 || !hasFiles) return null;
 
-  // Language detector for Monaco Editor
-  const detectLanguage = (fileName = "") => {
-    const name = fileName.toLowerCase();
-    if (name.endsWith(".html")) return "html";
-    if (name.endsWith(".css")) return "css";
-    if (name.endsWith(".js") || name.endsWith(".jsx")) return "javascript";
-    if (name.endsWith(".ts") || name.endsWith(".tsx")) return "typescript";
-    if (name.endsWith(".json")) return "json";
-    if (name.endsWith(".py")) return "python";
-    if (name.endsWith(".java")) return "java";
-    if (name.endsWith(".cpp") || name.endsWith(".c")) return "cpp";
+  const currentFile = files[activeFile] || files[0];
+
+  /**
+   * Constructs an isolated, rich HTML document with embedded Tailwind CDN & FontAwesome
+   */
+  const buildPreviewDoc = () => {
+    let rawHtml = htmlFile?.content || "<div style='padding:20px;'>No HTML file found.</div>";
+    const rawCss = cssFile?.content || "";
+    const rawJs = jsFile?.content || "";
+
+    const cdnInjections = `
+      <script src="https://cdn.tailwindcss.com"></script>
+      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+      <style>
+        body { font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif; }
+        ${rawCss}
+      </style>
+    `;
+
+    const jsInjection = `
+      <script>
+        window.onerror = function(msg, url, line) {
+          console.error('Preview Error: ' + msg + ' at ' + line);
+        };
+        try {
+          ${rawJs}
+        } catch (err) {
+          console.error('Execution Error:', err);
+        }
+      </script>
+    `;
+
+    if (/<\/head>/i.test(rawHtml)) {
+      rawHtml = rawHtml.replace(/<\/head>/i, `${cdnInjections}</head>`);
+    } else {
+      rawHtml = `<head>${cdnInjections}</head>${rawHtml}`;
+    }
+
+    if (/<\/body>/i.test(rawHtml)) {
+      rawHtml = rawHtml.replace(/<\/body>/i, `${jsInjection}</body>`);
+    } else {
+      rawHtml = `${rawHtml}${jsInjection}`;
+    }
+
+    if (!/<!doctype/i.test(rawHtml)) {
+      rawHtml = `<!DOCTYPE html><html lang="en">${rawHtml}</html>`;
+    }
+
+    return rawHtml;
+  };
+
+  const detectLang = (name = "") => {
+    const n = name.toLowerCase();
+    if (n.endsWith(".html")) return "html";
+    if (n.endsWith(".css")) return "css";
+    if (n.endsWith(".js") || n.endsWith(".jsx")) return "javascript";
+    if (n.endsWith(".ts") || n.endsWith(".tsx")) return "typescript";
+    if (n.endsWith(".json")) return "json";
+    if (n.endsWith(".py")) return "python";
+    if (n.endsWith(".cpp") || n.endsWith(".c")) return "cpp";
+    if (n.endsWith(".java")) return "java";
+    if (n.endsWith(".sql")) return "sql";
     return "plaintext";
   };
 
-  // Clipboard copy handler with fallback
   const handleCopy = async () => {
-    if (file?.content) {
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(file.content);
-        } else {
-          const textarea = document.createElement("textarea");
-          textarea.value = file.content;
-          textarea.style.position = "fixed";
-          textarea.style.opacity = "0";
-          document.body.appendChild(textarea);
-          textarea.focus();
-          textarea.select();
-          document.execCommand("copy");
-          document.body.removeChild(textarea);
-        }
-        setCopied(true);
-        setTimeout(() => {
-          setCopied(false);
-        }, 2000);
-      } catch (err) {
-        console.error("Copy failed:", err);
+    if (!currentFile?.content) return;
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(currentFile.content);
+      } else {
+        const t = document.createElement("textarea");
+        t.value = currentFile.content;
+        t.style.position = "fixed";
+        t.style.opacity = "0";
+        document.body.appendChild(t);
+        t.focus();
+        t.select();
+        document.execCommand("copy");
+        document.body.removeChild(t);
       }
-    }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
   };
+
+  const handleDownload = () => {
+    if (!currentFile?.content) return;
+    const blob = new Blob([currentFile.content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = currentFile.name || "code.txt";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const panelWidth = fullscreen ? "100vw" : collapsed ? 48 : 460;
 
   return (
     <motion.aside
-      initial={{ width: 420 }}
-      animate={{ width: collapsed ? 52 : 420 }}
+      initial={{ width: 460 }}
+      animate={{ width: panelWidth }}
       transition={{ duration: 0.25, ease: easeInOut }}
-      className="hidden lg:flex h-full overflow-hidden shrink-0"
+      className={`hidden lg:flex h-full overflow-hidden shrink-0 z-30 ${fullscreen ? "fixed inset-0" : "relative"}`}
     >
-      {/* ── EXPANDED STATE ── */}
       {!collapsed ? (
-        <div className="flex flex-col h-full w-[420px] bg-[#0c0e15] border-l border-white/[0.06]">
-
-          {/* Top Bar */}
-          <div className="h-14 px-3.5 border-b border-white/[0.06] flex items-center justify-between gap-2 shrink-0">
-            {/* Collapse & Title */}
-            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+        <div className="flex flex-col h-full w-full" style={{ background: "#fff", borderLeft: "1px solid #e8e6e1" }}>
+          {/* Header Bar */}
+          <div className="h-14 px-3.5 flex items-center justify-between gap-2 shrink-0"
+            style={{ borderBottom: "1px solid #e8e6e1", background: "#f9f8f6" }}>
+            <div className="flex items-center gap-2 min-w-0 flex-1">
               <button
-                className="flex items-center justify-center w-7 h-7 rounded-lg text-slate-400
-                hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer border-none bg-transparent shrink-0"
                 onClick={() => setCollapsed(true)}
                 title="Collapse Panel"
+                className="flex items-center justify-center w-7 h-7 rounded-lg cursor-pointer border-none transition-all shrink-0"
+                style={{ background: "transparent", color: "#9c9590" }}
               >
                 <PanelRightClose size={15} />
               </button>
-
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="flex items-center justify-center w-5 h-5 rounded-md bg-indigo-500/10 border border-indigo-500/20 shrink-0">
-                  <Code2 className="text-indigo-400" size={11} />
-                </div>
-                <span className="text-[12.5px] font-semibold text-slate-200 truncate">
-                  {artifacts?.[0]?.title || "Generated Project"}
-                </span>
+              <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0" style={{ background: "#f3f0ff" }}>
+                <Code2 size={11} style={{ color: "#8b5cf6" }} />
               </div>
+              <span className="text-[13px] font-semibold truncate" style={{ color: "#1a1918" }}>
+                {artifact?.title || "Generated Application"}
+              </span>
             </div>
 
-            {/* Actions: Copy & View Toggle */}
+            {/* Actions */}
             <div className="flex items-center gap-1.5 shrink-0">
+              {/* Copy file */}
               <button
                 onClick={handleCopy}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
-                  copied
-                    ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
-                    : "bg-white/[0.04] text-slate-300 hover:text-white border-white/[0.06] hover:bg-white/[0.08]"
-                }`}
-                title="Copy active file content"
+                title="Copy current file"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-medium cursor-pointer border-none transition-all"
+                style={copied
+                  ? { background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac" }
+                  : { background: "#fff", color: "#6b6560", border: "1px solid #e8e6e1" }}
               >
-                {copied ? (
-                  <>
-                    <Check size={11} className="text-emerald-400" />
-                    <span>Copied</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy size={11} />
-                    <span>Copy</span>
-                  </>
-                )}
+                {copied ? <><Check size={11} /><span>Copied</span></> : <><Copy size={11} /><span>Copy</span></>}
               </button>
 
-              {/* Code / Preview toggle */}
-              {canPreview && (
-                <div className="flex items-center p-0.5 rounded-lg bg-white/[0.04] border border-white/[0.06]">
+              {/* Download single file */}
+              <button
+                onClick={handleDownload}
+                title="Download file"
+                className="flex items-center justify-center w-7 h-7 rounded-lg cursor-pointer border-none transition-all"
+                style={{ background: "#fff", color: "#6b6560", border: "1px solid #e8e6e1" }}
+              >
+                <Download size={12} />
+              </button>
+
+              {/* Fullscreen toggle */}
+              <button
+                onClick={() => setFullscreen(!fullscreen)}
+                title={fullscreen ? "Exit Fullscreen" : "Fullscreen"}
+                className="flex items-center justify-center w-7 h-7 rounded-lg cursor-pointer border-none transition-all"
+                style={{ background: "#fff", color: "#6b6560", border: "1px solid #e8e6e1" }}
+              >
+                {fullscreen ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+              </button>
+
+              {/* Code vs Preview Toggle */}
+              {isWebProject && (
+                <div className="flex items-center p-0.5 rounded-lg ml-1" style={{ background: "#f3f2ef", border: "1px solid #e8e6e1" }}>
                   <button
                     onClick={() => setTab("code")}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors border-none cursor-pointer ${
-                      tab === "code"
-                        ? "bg-indigo-500/20 text-indigo-300 shadow-xs"
-                        : "bg-transparent text-slate-400 hover:text-slate-200"
-                    }`}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium cursor-pointer border-none transition-all"
+                    style={tab === "code"
+                      ? { background: "#fff", color: "#1a1918", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
+                      : { background: "transparent", color: "#9c9590" }}
                   >
-                    <Code2Icon size={11} />
-                    <span>Code</span>
+                    <Code2Icon size={11} />Code
                   </button>
                   <button
                     onClick={() => setTab("preview")}
-                    className={`flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors border-none cursor-pointer ${
-                      tab === "preview"
-                        ? "bg-indigo-500/20 text-indigo-300 shadow-xs"
-                        : "bg-transparent text-slate-400 hover:text-slate-200"
-                    }`}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium cursor-pointer border-none transition-all"
+                    style={tab === "preview"
+                      ? { background: "#fff", color: "#8b5cf6", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }
+                      : { background: "transparent", color: "#9c9590" }}
                   >
-                    <Eye size={11} />
-                    <span>Preview</span>
+                    <Eye size={11} />Preview
                   </button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* File tabs row */}
+          {/* File Tabs (in Code Mode) */}
           {tab === "code" && (
-            <div className="flex items-center gap-1 px-3 py-2 border-b border-white/[0.06] bg-[#090b0f] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden shrink-0">
-              {artifacts[0]?.files?.map((f, index) => (
+            <div className="flex items-center gap-1 px-3 py-2 shrink-0 overflow-x-auto"
+              style={{ background: "#f9f8f6", borderBottom: "1px solid #e8e6e1", scrollbarWidth: "none" }}>
+              {files.map((f, i) => (
                 <button
-                  key={index}
-                  onClick={() => setActiveFile(index)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all border cursor-pointer shrink-0 ${
-                    activeFile === index
-                      ? "bg-indigo-500/15 border-indigo-500/30 text-indigo-300 font-semibold"
-                      : "bg-white/[0.02] border-white/[0.04] text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]"
-                  }`}
+                  key={i}
+                  onClick={() => setActiveFile(i)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono cursor-pointer border-none shrink-0 transition-all"
+                  style={activeFile === i
+                    ? { background: "#fff", color: "#1a1918", border: "1px solid #e8e6e1", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }
+                    : { background: "transparent", color: "#9c9590", border: "1px solid transparent" }}
                 >
-                  <FileCode2 size={12} className={activeFile === index ? "text-indigo-400" : "text-slate-500"} />
-                  <span>{f?.name}</span>
+                  <FileCode2 size={11} style={{ color: activeFile === i ? "#8b5cf6" : "#c4c0b8" }} />
+                  {f?.name}
                 </button>
               ))}
             </div>
           )}
 
-          {/* Content Area: Live Iframe vs Monaco Editor */}
-          <div className="flex-1 overflow-hidden bg-[#0c0e15]">
-            {tab === "preview" && canPreview ? (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2 }}
-                className="w-full h-full bg-white"
+          {/* Preview Controls Bar */}
+          {tab === "preview" && isWebProject && (
+            <div className="flex items-center justify-between px-3.5 py-1.5 shrink-0"
+              style={{ background: "#faf8ff", borderBottom: "1px solid #ede9fe" }}>
+              <span className="text-[11px] font-medium flex items-center gap-1.5" style={{ color: "#7c3aed" }}>
+                <span className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#10b981" }} />
+                Live Interactive Sandbox
+              </span>
+              <button
+                onClick={() => setRefreshKey(k => k + 1)}
+                className="flex items-center gap-1 text-[11px] px-2 py-0.5 rounded cursor-pointer border-none"
+                style={{ background: "#ede9fe", color: "#7c3aed" }}
+                title="Rerun sandbox"
               >
+                <RotateCw size={10} /> Reload
+              </button>
+            </div>
+          )}
+
+          {/* Body Content */}
+          <div className="flex-1 overflow-hidden">
+            {tab === "preview" && isWebProject ? (
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full bg-white">
                 <iframe
-                  title="Interactive Preview"
-                  srcDoc={previewDoc}
+                  key={refreshKey}
+                  title="Interactive App Preview"
+                  srcDoc={buildPreviewDoc()}
                   className="w-full h-full border-none"
-                  sandbox="allow-scripts allow-modals"
+                  sandbox="allow-scripts allow-modals allow-same-origin allow-forms"
                 />
               </motion.div>
             ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.2 }}
-                className="w-full h-full"
-              >
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full h-full">
                 <Editor
-                  theme="vs-dark"
-                  language={detectLanguage(file?.name)}
-                  value={file?.content || ""}
+                  theme="vs"
+                  language={detectLang(currentFile?.name)}
+                  value={currentFile?.content || ""}
                   options={{
                     readOnly: true,
                     minimap: { enabled: false },
@@ -234,8 +306,7 @@ ${jsFile?.content || ""}
                     automaticLayout: true,
                     scrollBeyondLastLine: false,
                     padding: { top: 16, bottom: 16 },
-                    lineNumbers: "on",
-                    renderLineHighlight: "none",
+                    lineNumbers: "on"
                   }}
                 />
               </motion.div>
@@ -243,14 +314,16 @@ ${jsFile?.content || ""}
           </div>
         </div>
       ) : (
-        /* ── COLLAPSED STRIP ── */
-        <div className="flex flex-col items-center w-[52px] py-4 gap-3 bg-[#0c0e15] border-l border-white/[0.06]">
+        /* Collapsed strip */
+        <div className="flex flex-col items-center w-12 py-4 gap-3 h-full"
+          style={{ background: "#f9f8f6", borderLeft: "1px solid #e8e6e1" }}>
           <button
             onClick={() => setCollapsed(false)}
-            className="flex items-center justify-center w-8 h-8 rounded-xl text-slate-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer border-none bg-transparent"
             title="Expand Artifacts"
+            className="flex items-center justify-center w-8 h-8 rounded-xl cursor-pointer border-none transition-all"
+            style={{ background: "#f3f0ff", color: "#8b5cf6" }}
           >
-            <Code2 size={16} />
+            <Code2 size={15} />
           </button>
         </div>
       )}

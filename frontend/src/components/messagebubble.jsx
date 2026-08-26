@@ -1,302 +1,146 @@
-import { Check, Copy, ExternalLink, XIcon } from 'lucide-react';
-import React, { useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
-import SyntaxHighlighter from 'react-syntax-highlighter';
-import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { Check, Copy, ExternalLink, XIcon } from "lucide-react";
+import React, { useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import SyntaxHighlighter from "react-syntax-highlighter";
+import { githubGist } from "react-syntax-highlighter/dist/esm/styles/hljs";
+import { motion, AnimatePresence } from "motion/react";
 
-/**
- * ============================================================================
- * MESSAGE BUBBLE COMPONENT (`messagebubble.jsx`)
- * ============================================================================
- * Features:
- * - Rich GitHub-Flavored Markdown rendering (`react-markdown` + `remark-gfm`).
- * - Syntax-highlighted code blocks with Mac-style headers and individual copy buttons.
- * - Image asset gallery with interactive full-screen Lightbox modal.
- * - One-click whole-message copying for AI responses.
- * ============================================================================
- */
 function MessageBubble({ role, content, images }) {
   const isUser = role === "user";
   const [lightBox, setLightBox] = useState(null);
-  const [copiedIndex, setCopiedIndex] = useState(null);
-  const [copiedMessage, setCopiedMessage] = useState(false);
+  const [copiedIdx, setCopiedIdx] = useState(null);
+  const [copiedMsg, setCopiedMsg] = useState(false);
+  let codeCount = 0;
 
-  // Copy full message content
-  const copyMessage = async () => {
+  const copyText = async (text, setter) => {
     try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(content || '');
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = content || '';
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
+      if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text);
+      else {
+        const t = document.createElement("textarea"); t.value = text; t.style.position = "fixed"; t.style.opacity = "0";
+        document.body.appendChild(t); t.focus(); t.select(); document.execCommand("copy"); document.body.removeChild(t);
       }
-      setCopiedMessage(true);
-      setTimeout(() => {
-        setCopiedMessage(false);
-      }, 2000);
-    } catch (err) {
-      console.error("Failed to copy message:", err);
-    }
+      setter(true); setTimeout(() => setter(false), 2000);
+    } catch {}
   };
-
-  // Copy individual code snippet block
-  const copyCode = async (code, blockIndex) => {
-    try {
-      if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(code);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = code;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.focus();
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
-      setCopiedIndex(blockIndex);
-      setTimeout(() => {
-        setCopiedIndex(null);
-      }, 2000);
-    } catch (err) {
-      console.error("Failed to copy code:", err);
-    }
-  };
-
-  let codeBlockCount = 0;
 
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} my-2 group`}>
-      <div
-        className={`
-          ${isUser 
-            ? "w-fit max-w-[92vw] md:max-w-[72%] bg-gradient-to-r from-indigo-500 via-indigo-600 to-violet-600 text-white rounded-2xl rounded-tr-xs shadow-md shadow-indigo-500/10 px-4.5 py-3" 
-            : "w-full max-w-[96%] md:max-w-[92%] bg-[#10131b]/95 text-slate-200 rounded-2xl rounded-tl-xs border border-white/[0.06] shadow-sm px-5 py-4"
-          }
-          break-words overflow-hidden leading-relaxed text-[13.5px]
-        `}
-      >
-        {/* Uploaded or Generated Images Gallery */}
+    <div className={"flex " + (isUser ? "justify-end" : "justify-start") + " my-1 group"}>
+      <div className="break-words overflow-hidden text-[13.5px] leading-relaxed"
+        style={isUser ? {
+          maxWidth: "75%",
+          background: "#8b5cf6",
+          color: "#fff",
+          borderRadius: "18px 18px 4px 18px",
+          padding: "10px 16px"
+        } : {
+          width: "100%",
+          maxWidth: "100%",
+          background: "#fff",
+          color: "#1a1918",
+          borderRadius: "4px 18px 18px 18px",
+          border: "1px solid #e8e6e1",
+          padding: "14px 18px"
+        }}>
+
+        {/* Images */}
         {images && images.length > 0 && (
-          <div className="flex flex-wrap gap-3 mb-4">
+          <div className="flex flex-wrap gap-2 mb-3">
             {images.map((img, i) => (
-              <div key={i} className="relative group/img overflow-hidden rounded-xl border border-white/10">
-                <img
-                  src={img}
-                  onClick={() => setLightBox(img)}
-                  loading="lazy"
-                  alt="Generated or uploaded asset"
-                  onError={(e) => e.currentTarget.remove()}
-                  className="w-48 h-32 object-cover cursor-zoom-in group-hover/img:scale-105 transition-transform duration-200"
-                />
-              </div>
+              <img key={i} src={img} onClick={() => setLightBox(img)} loading="lazy"
+                onError={(e) => e.currentTarget.remove()}
+                className="w-40 h-28 object-cover rounded-xl cursor-zoom-in"
+                style={{ border: isUser ? "1.5px solid rgba(255,255,255,0.3)" : "1.5px solid #e8e6e1" }} />
             ))}
           </div>
         )}
 
-        {/* Markdown Renderer with Custom Components */}
-        <Markdown
-          remarkPlugins={[remarkGfm]}
-          components={{
-            h1: ({ children }) => (
-              <h1 className="text-xl font-bold text-white mt-4 mb-2 tracking-tight border-b border-white/[0.08] pb-1.5">{children}</h1>
-            ),
-            h2: ({ children }) => (
-              <h2 className="text-lg font-bold text-white mt-3.5 mb-2 tracking-tight">{children}</h2>
-            ),
-            h3: ({ children }) => (
-              <h3 className="text-[15px] font-semibold text-indigo-300 mt-3 mb-1.5">{children}</h3>
-            ),
-            p: ({ children }) => (
-              <p className="mb-2.5 last:mb-0 whitespace-pre-wrap break-words leading-relaxed">{children}</p>
-            ),
-            blockquote: ({ children }) => (
-              <blockquote className="border-l-3 border-indigo-500/60 bg-indigo-500/5 px-3.5 py-2 my-2.5 rounded-r-lg text-slate-300 italic">
-                {children}
-              </blockquote>
-            ),
-            ul: ({ children }) => (
-              <ul className="list-disc pl-5 space-y-1 my-2 text-slate-300">{children}</ul>
-            ),
-            ol: ({ children }) => (
-              <ol className="list-decimal pl-5 space-y-1 my-2 text-slate-300">{children}</ol>
-            ),
-            table: ({ children }) => (
-              <div className="overflow-x-auto my-3 rounded-xl border border-white/[0.08]">
-                <table className="min-w-full text-left text-xs divide-y divide-white/[0.08]">
-                  {children}
-                </table>
-              </div>
-            ),
-            th: ({ children }) => (
-              <th className="bg-white/[0.04] px-3.5 py-2.5 font-semibold text-slate-200 uppercase tracking-wider text-[11px]">
-                {children}
-              </th>
-            ),
-            td: ({ children }) => (
-              <td className="px-3.5 py-2 border-t border-white/[0.04] text-slate-300">
-                {children}
-              </td>
-            ),
-            a: ({ href, children }) => (
-              <a
-                href={href}
-                target="_blank"
-                rel="noreferrer"
-                className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 inline-flex items-center gap-1 font-medium transition-colors"
-              >
-                {children}
-                <ExternalLink size={12} />
-              </a>
-            ),
-            code: ({ className, children }) => {
-              const value = String(children).trim();
-
-              if (!className) {
-                return (
-                  <code className="px-1.5 py-0.5 rounded-md bg-white/[0.08] text-indigo-300 font-mono text-[12.5px] border border-white/[0.04]">
-                    {value}
-                  </code>
-                );
-              }
-
-              const blockIndex = codeBlockCount++;
-              const isCopied = copiedIndex === blockIndex;
-              const language = className?.replace("language-", "");
-
-              return (
-                <div className="my-3.5 overflow-hidden rounded-xl border border-white/[0.08] bg-[#0c0e14] shadow-md">
-                  {/* Code Block Header with Mac-style window controls */}
-                  <div className="flex items-center justify-between bg-[#151821] border-b border-white/[0.08] px-3.5 py-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-1.5 mr-1">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                      </div>
-                      <span className="uppercase text-[11px] font-mono font-semibold tracking-wider text-slate-400">
-                        {language || "code"}
-                      </span>
+        <Markdown remarkPlugins={[remarkGfm]} components={{
+          h1: ({ children }) => <h1 className="text-xl font-bold mt-4 mb-2 pb-1.5" style={{ color: isUser ? "#fff" : "#1a1918", borderBottom: "1px solid " + (isUser ? "rgba(255,255,255,0.2)" : "#e8e6e1") }}>{children}</h1>,
+          h2: ({ children }) => <h2 className="text-lg font-bold mt-3 mb-1.5" style={{ color: isUser ? "#fff" : "#1a1918" }}>{children}</h2>,
+          h3: ({ children }) => <h3 className="text-[15px] font-semibold mt-2.5 mb-1" style={{ color: isUser ? "rgba(255,255,255,0.9)" : "#5b21b6" }}>{children}</h3>,
+          p: ({ children }) => <p className="mb-2 last:mb-0 whitespace-pre-wrap break-words leading-relaxed">{children}</p>,
+          blockquote: ({ children }) => <blockquote className="pl-3.5 py-1.5 my-2 italic"
+            style={{ borderLeft: "3px solid " + (isUser ? "rgba(255,255,255,0.4)" : "#8b5cf6"), color: isUser ? "rgba(255,255,255,0.8)" : "#6b6560" }}>{children}</blockquote>,
+          ul: ({ children }) => <ul className="list-disc pl-5 space-y-1 my-2">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal pl-5 space-y-1 my-2">{children}</ol>,
+          table: ({ children }) => <div className="overflow-x-auto my-3 rounded-xl" style={{ border: "1px solid #e8e6e1" }}>
+            <table className="min-w-full text-left text-xs">{children}</table></div>,
+          th: ({ children }) => <th className="px-3.5 py-2.5 font-semibold uppercase tracking-wider text-[11px]"
+            style={{ background: "#f9f8f6", color: "#1a1918", borderBottom: "1px solid #e8e6e1" }}>{children}</th>,
+          td: ({ children }) => <td className="px-3.5 py-2" style={{ borderTop: "1px solid #f3f2ef", color: "#4a4844" }}>{children}</td>,
+          a: ({ href, children }) => <a href={href} target="_blank" rel="noreferrer"
+            className="inline-flex items-center gap-0.5 underline underline-offset-2 transition-colors"
+            style={{ color: isUser ? "rgba(255,255,255,0.9)" : "#7c3aed" }}>{children}<ExternalLink size={11} /></a>,
+          code: ({ className, children }) => {
+            const val = String(children).trim();
+            if (!className) return <code className="px-1.5 py-0.5 rounded-md font-mono text-[12.5px]"
+              style={{ background: isUser ? "rgba(255,255,255,0.15)" : "#f3f0ff", color: isUser ? "#fff" : "#7c3aed" }}>{val}</code>;
+            const idx = codeCount++;
+            const lang = className?.replace("language-", "");
+            return (
+              <div className="my-3 overflow-hidden rounded-xl" style={{ border: "1px solid #e8e6e1" }}>
+                <div className="flex items-center justify-between px-3.5 py-2" style={{ background: "#f9f8f6", borderBottom: "1px solid #e8e6e1" }}>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#ff5f57" }} />
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#febc2e" }} />
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ background: "#28c840" }} />
                     </div>
-
-                    <button
-                      type="button"
-                      className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md transition-all duration-150 border cursor-pointer ${
-                        isCopied
-                          ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
-                          : "bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 hover:text-white border-white/[0.08]"
-                      }`}
-                      onClick={() => copyCode(value, blockIndex)}
-                      title="Copy code"
-                    >
-                      {isCopied ? (
-                        <>
-                          <Check size={12} className="text-emerald-400" />
-                          <span className="font-medium text-emerald-400">Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={12} />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
+                    <span className="text-[10.5px] font-mono font-semibold uppercase tracking-wider" style={{ color: "#6b6560" }}>{lang || "code"}</span>
                   </div>
-
-                  <SyntaxHighlighter
-                    language={language}
-                    style={atomOneDark}
-                    wrapLongLines
-                    showLineNumbers
-                    customStyle={{
-                      margin: 0,
-                      padding: "14px 16px",
-                      background: "#0c0e14",
-                      fontSize: "12.5px",
-                      fontFamily: "'JetBrains Mono', monospace"
-                    }}
-                  >
-                    {value}
-                  </SyntaxHighlighter>
+                  <button type="button" onClick={() => copyText(val, (v) => setCopiedIdx(v ? idx : null))}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg cursor-pointer border-none transition-all font-medium"
+                    style={copiedIdx === idx
+                      ? { background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac" }
+                      : { background: "#fff", color: "#6b6560", border: "1px solid #e8e6e1" }}>
+                    {copiedIdx === idx ? <><Check size={11} /><span>Copied!</span></> : <><Copy size={11} /><span>Copy</span></>}
+                  </button>
                 </div>
-              );
-            },
-            img: ({ src, alt }) => {
-              if (!src) return null;
-              return (
-                <img
-                  src={src}
-                  alt={alt}
-                  onClick={() => setLightBox(src)}
-                  loading="lazy"
-                  onError={(e) => e.currentTarget.remove()}
-                  className="rounded-xl border border-white/10 max-h-96 object-contain my-2 cursor-zoom-in hover:opacity-95 transition"
-                />
-              );
-            }
-          }}
-        >
-          {content}
-        </Markdown>
+                <SyntaxHighlighter language={lang} style={githubGist} wrapLongLines showLineNumbers
+                  customStyle={{ margin: 0, padding: "14px 16px", background: "#fff", fontSize: "12.5px", fontFamily: "JetBrains Mono, monospace" }}
+                  lineNumberStyle={{ color: "#d4d0c8", fontSize: "11px" }}>
+                  {val}
+                </SyntaxHighlighter>
+              </div>
+            );
+          },
+          img: ({ src, alt }) => src ? <img src={src} alt={alt} onClick={() => setLightBox(src)} loading="lazy"
+            onError={(e) => e.currentTarget.remove()}
+            className="rounded-xl max-h-80 object-contain my-2 cursor-zoom-in"
+            style={{ border: "1px solid #e8e6e1" }} /> : null,
+        }}>{content}</Markdown>
 
-        {/* Copy Response Button for Assistant */}
         {!isUser && content && (
-          <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-white/[0.04]">
-            <button
-              type="button"
-              onClick={copyMessage}
-              className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg transition-all duration-150 border cursor-pointer ${
-                copiedMessage
-                  ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/20"
-                  : "bg-white/[0.03] hover:bg-white/[0.08] text-slate-400 hover:text-slate-200 border-white/[0.06]"
-              }`}
-              title="Copy full response"
-            >
-              {copiedMessage ? (
-                <>
-                  <Check size={12} className="text-emerald-400" />
-                  <span className="text-[11px] font-medium text-emerald-400">Copied response</span>
-                </>
-              ) : (
-                <>
-                  <Copy size={12} />
-                  <span className="text-[11px]">Copy response</span>
-                </>
-              )}
+          <div className="flex items-center justify-end mt-2 pt-2" style={{ borderTop: "1px solid #f3f2ef" }}>
+            <button type="button" onClick={() => copyText(content, setCopiedMsg)}
+              className="flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-xl cursor-pointer border-none transition-all font-medium"
+              style={copiedMsg
+                ? { background: "#f0fdf4", color: "#15803d", border: "1px solid #86efac" }
+                : { background: "#f9f8f6", color: "#9c9590", border: "1px solid #e8e6e1" }}>
+              {copiedMsg ? <><Check size={11} /><span>Copied</span></> : <><Copy size={11} /><span>Copy</span></>}
             </button>
           </div>
         )}
       </div>
 
-      {/* Full-Screen Media Lightbox Modal */}
-      {lightBox && (
-        <div
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-6"
-          onClick={() => setLightBox(null)}
-        >
-          <button
-            className="absolute top-5 right-5 text-white/80 hover:text-white bg-white/10 hover:bg-white/20 rounded-full p-2.5 transition-colors cursor-pointer border-none"
-            onClick={() => setLightBox(null)}
-          >
-            <XIcon size={20} />
-          </button>
-          <img
-            src={lightBox}
-            alt="Preview"
-            onClick={(e) => e.stopPropagation()}
-            className="max-w-[90vw] max-h-[85vh] rounded-2xl border border-white/10 shadow-2xl object-contain"
-          />
-        </div>
-      )}
+      {/* Lightbox */}
+      <AnimatePresence>
+        {lightBox && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+            style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(8px)" }}
+            onClick={() => setLightBox(null)}>
+            <button className="absolute top-5 right-5 p-2.5 rounded-full cursor-pointer border-none"
+              style={{ background: "rgba(255,255,255,0.12)", color: "#fff" }}
+              onClick={() => setLightBox(null)}><XIcon size={20} /></button>
+            <motion.img initial={{ scale: 0.92 }} animate={{ scale: 1 }} exit={{ scale: 0.92 }}
+              src={lightBox} alt="Preview" onClick={(e) => e.stopPropagation()}
+              className="max-w-[90vw] max-h-[85vh] rounded-2xl object-contain"
+              style={{ border: "1px solid rgba(255,255,255,0.15)", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -17,8 +17,13 @@ dist/
 build/
 .cache/
 
-# Runtime & Temporary files
+# Runtime, Temporary & Scratch test files
 temp/
+**/temp/
+*.tmp
+*.temp
+test_*.mjs
+test_*.js
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -27,5 +32,10 @@ yarn-error.log*
 # System & Editor files
 .DS_Store
 Thumbs.db
+Desktop.ini
 .vscode/
 .idea/
+
+# Local Documentation & Interview Prep (Private)
+PROJECT_EXPLANATION_AND_INTERVIEW_PREP.md
+RECRUITER_PERSPECTIVE_QA.md

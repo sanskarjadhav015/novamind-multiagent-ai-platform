@@ -12,17 +12,18 @@ import redis from "../../../shared/redis/redis.js";
  * ============================================================================
  */
 
-// Per-minute request limits per agent type
+// Per-minute request limits per agent type (Heavy compute/document agents capped at 1 req/min)
 const Limits = {
-    chat: 20,
-    coding: 5,
-    pdf: 5,
-    pdfRag: 5,
-    ppt: 5,
-    image: 5,
-    vision: 5,
-    imageAnalyzer: 5,
-    search: 10
+    chat: Number(process.env.LIMIT_CHAT) || 20,
+    coding: Number(process.env.LIMIT_CODING) || 1,
+    pdf: Number(process.env.LIMIT_PDF) || 1,
+    pdfRag: Number(process.env.LIMIT_PDF_RAG) || 1,
+    rag: Number(process.env.LIMIT_RAG) || 1,
+    ppt: Number(process.env.LIMIT_PPT) || 1,
+    image: Number(process.env.LIMIT_IMAGE) || 5,
+    vision: Number(process.env.LIMIT_VISION) || 5,
+    imageAnalyzer: Number(process.env.LIMIT_IMAGE_ANALYZER) || 5,
+    search: Number(process.env.LIMIT_SEARCH) || 10
 };
 
 /**
@@ -35,7 +36,7 @@ export const checkAgentLimit = async (userId, agent = "chat") => {
         return { remaining: 999, limit: 999 };
     }
 
-    const max = Limits[agent] || Limits["chat"] || 20;
+    const max = Limits[agent] ?? Limits["chat"] ?? 20;
     const key = `rate:${userId}:${agent}`;
     
     // Atomic increment
@@ -53,7 +54,8 @@ export const checkAgentLimit = async (userId, agent = "chat") => {
         const minutes = Math.floor(ttl / 60);
         const seconds = ttl % 60;
         const time = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
-        const error = new Error(`You have reached the ${agent} limit (${max} requests/minute). Please try again in ${time}.`);
+        const reqText = max === 1 ? "1 request/minute" : `${max} requests/minute`;
+        const error = new Error(`You have reached the ${agent} limit (${reqText}). Please try again in ${time}.`);
         error.status = 429;
         error.data = {
             success: false,
@@ -61,7 +63,7 @@ export const checkAgentLimit = async (userId, agent = "chat") => {
             limit: max,
             remainingTime: ttl,
             retryAfter: time,
-            message: `You have reached the ${agent} limit (${max} requests/minute). Try again in ${time}.`
+            message: `You have reached the ${agent} limit (${reqText}). Try again in ${time}.`
         };
         throw error;
     }

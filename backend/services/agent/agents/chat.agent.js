@@ -14,16 +14,73 @@ import { checkAgentLimit } from "../config/agentLimit.js";
  * - Rate limit: 20 req/min | Credit Cost: 1 credit
  * ============================================================================
  */
+
+// Tunables — pull from env so they can be adjusted without a redeploy.
+const MAX_PROMPT_LENGTH = Number(process.env.CHAT_MAX_PROMPT_LENGTH) || 8000;
+const MAX_HISTORY_MESSAGES = Number(process.env.CHAT_MAX_HISTORY_MESSAGES) || 30;
+const LLM_TIMEOUT_MS = Number(process.env.CHAT_LLM_TIMEOUT_MS) || 30_000;
+
+/**
+ * Extracts plain text from a LangChain response, which can be a string or
+ * an array of content blocks (e.g. [{ type: "text", text: "..." }, ...]).
+ */
+const extractText = (content) => {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+        return content
+            .map((block) => (typeof block === "string" ? block : block?.text ?? ""))
+            .filter(Boolean)
+            .join("\n")
+            .trim();
+    }
+    return "";
+};
+
+/**
+ * Wraps a promise with a hard timeout so a hung provider can't stall the request.
+ */
+const withTimeout = (promise, ms, label) =>
+    Promise.race([
+        promise,
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+        )
+    ]);
+
+/**
+ * Keeps only the most recent N messages to avoid unbounded context growth
+ * on long-running conversations.
+ */
+const windowHistory = (history, maxMessages) =>
+    history.length > maxMessages ? history.slice(-maxMessages) : history;
+
 export const chatAgent = async (state) => {
+    const logCtx = { userId: state?.userId, conversationId: state?.conversationId };
+
     try {
-        // 1. Rate Limit Enforcement
+        // 1. Input Validation
+        if (!state?.prompt || typeof state.prompt !== "string" || !state.prompt.trim()) {
+            return {
+                ...state,
+                aiResponse: "Please provide a message for me to respond to."
+            };
+        }
+        if (state.prompt.length > MAX_PROMPT_LENGTH) {
+            return {
+                ...state,
+                aiResponse: `Your message is too long (${state.prompt.length} characters). Please shorten it to under ${MAX_PROMPT_LENGTH} characters.`
+            };
+        }
+
+        // 2. Rate Limit Enforcement
         await checkAgentLimit(state.userId, "chat");
 
-        // 2. Resolve LLM & Fetch Conversation History
+        // 3. Resolve LLM & Fetch Conversation History
         const llm = await getmodel("chat");
-        const history = await getMemory(state.conversationId);
+        const rawHistory = await getMemory(state.conversationId);
+        const history = windowHistory(rawHistory ?? [], MAX_HISTORY_MESSAGES);
 
-        // 3. Format Search Context (if pipelined from searchAgent)
+        // 4. Format Search Context (if pipelined from searchAgent)
         let searchContext = "";
         if (state.searchResults?.results?.length > 0) {
             const formatted = state.searchResults.results
@@ -39,7 +96,7 @@ Answer the user using the above search results when relevant.
 `;
         }
 
-        // 4. System Instructions & Formatting Guidelines
+        // 5. System Instructions & Formatting Guidelines
         const systemPrompt = `
 You are NovaMind, an intelligent assistant.
 
@@ -69,10 +126,11 @@ Formatting:
 - Never create headings followed by large walls of text.
 `;
 
-        // 5. Construct Chat Messages Array
+        // 6. Construct Chat Messages Array
         const messages = [new SystemMessage(systemPrompt)];
 
         history.forEach((msg) => {
+            if (!msg?.content) return;
             if (msg.role === "user") {
                 messages.push(new HumanMessage(msg.content));
             } else {
@@ -86,45 +144,70 @@ Formatting:
             messages.push(new HumanMessage(state.prompt));
         }
 
-        // 6. Invoke LLM
-        const response = await llm.invoke(messages);
+        // 7. Invoke LLM (with hard timeout)
+        let response;
+        try {
+            response = await withTimeout(llm.invoke(messages), LLM_TIMEOUT_MS, "Chat LLM invocation");
+        } catch (invokeError) {
+            console.error("[Chat Agent] LLM invocation failed:", { ...logCtx, error: invokeError.message });
+            return {
+                ...state,
+                aiResponse: "I'm having trouble generating a response right now. Please try again in a moment."
+            };
+        }
 
-        if (!response?.content) {
+        const responseText = extractText(response?.content);
+
+        if (!responseText) {
+            console.warn("[Chat Agent] Empty response from LLM.", logCtx);
             return {
                 ...state,
                 aiResponse: "Sorry, I couldn't generate a response. Please try again."
             };
         }
 
-        // 7. Deduct Credits (1 Credit for Chat)
+        // 8. Deduct Credits (1 Credit for Chat)
         if (!state.userId) {
-            console.error("[Chat Agent] userId is missing. Credits were not deducted.");
+            console.error("[Chat Agent] userId is missing. Credits were not deducted.", logCtx);
             return {
                 ...state,
-                aiResponse: response.content
+                aiResponse: responseText
             };
         }
 
         try {
             await deductCredits(state.userId, "chat");
         } catch (creditError) {
-            console.error("[Chat Agent] Credit deduction failed:", creditError);
+            // The response was already generated successfully — don't throw it away.
+            // Log for reconciliation/billing follow-up instead of masking the answer.
+            console.error("[Chat Agent] Credit deduction failed after successful generation:", {
+                ...logCtx,
+                error: creditError.message
+            });
             return {
                 ...state,
-                aiResponse: "Response generated, but credit deduction failed. Please try again."
+                aiResponse: responseText,
+                creditDeductionFailed: true
             };
         }
 
-        // 8. Return Final State
+        // 9. Return Final State
         return {
             ...state,
-            aiResponse: response.content
+            aiResponse: responseText
         };
     } catch (error) {
-        console.error("[Chat Agent] Error:", error);
+        console.error("[Chat Agent] Error:", { ...logCtx, error: error.message, stack: error.stack });
+
+        // Rate-limit errors get a friendlier, specific message instead of a raw stack trace.
+        const isRateLimit = /rate limit|too many requests/i.test(error.message ?? "");
+        const userMessage = isRateLimit
+            ? "You're sending messages too quickly. Please wait a moment and try again."
+            : "Something went wrong while processing your request. Please try again shortly.";
+
         return {
             ...state,
-            aiResponse: `# ❌ Chat Agent Error\n\n${error.message}`
+            aiResponse: `# ❌ Chat Agent Error\n\n${userMessage}`
         };
     }
 };

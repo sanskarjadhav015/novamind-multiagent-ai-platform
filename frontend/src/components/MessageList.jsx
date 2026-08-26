@@ -2,121 +2,98 @@ import React, { useEffect, useRef } from "react";
 import { useSelector } from "react-redux";
 import MessageBubble from "./messagebubble";
 import LoadingAnimation from "./LoadingAnimation";
-import { Code2, FileText, Globe, Sparkles } from "lucide-react";
-import { motion } from "motion/react";
+import { Code2, FileText, Globe, Sparkles, Zap, Brain, ImageIcon, Presentation } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 
-/**
- * ============================================================================
- * MESSAGE LIST COMPONENT (`MessageList.jsx`)
- * ============================================================================
- * Renders:
- * - Default zero-state Welcome Hero with capability cards when no messages exist.
- * - Chronological MessageBubble list with automated smooth scrolling to bottom.
- * - LoadingAnimation indicator when `isLoading` is true.
- * ============================================================================
- */
 function MessageList() {
-  const { messages, isLoading } = useSelector((state) => state.message);
+  const { messages, isLoading, loadingConversationId } = useSelector((s) => s.message);
+  const { selectedConversation } = useSelector((s) => s.conversation);
   const bottomRef = useRef(null);
 
-  // Auto scroll to latest message
+  const currentConvId = selectedConversation?._id || "new";
+  const shouldShowLoading = isLoading && (!loadingConversationId || loadingConversationId === currentConvId);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
+  }, [messages, shouldShowLoading]);
 
-  const capabilityCards = [
-    {
-      icon: Code2,
-      tag: "Coding Agent",
-      title: "Interactive Web Project",
-      desc: "Generate complete HTML, CSS & JS apps with live preview"
-    },
-    {
-      icon: Sparkles,
-      tag: "Vision Agent",
-      title: "AI Image Generation",
-      desc: "Create photorealistic imagery from detailed prompts"
-    },
-    {
-      icon: FileText,
-      tag: "PDF / RAG",
-      title: "Document Intelligence",
-      desc: "Analyze and query PDF reports with vector search"
-    },
-    {
-      icon: Globe,
-      tag: "Search Agent",
-      title: "Web Research",
-      desc: "Synthesize real-time data and web sources"
-    }
+  const cards = [
+    { icon: Code2,       tag: "Coding",   title: "Web Projects",          desc: "Generate full HTML/CSS/JS apps with live preview" },
+    { icon: ImageIcon,   tag: "Vision",   title: "Image Generation",      desc: "Create images from text prompts" },
+    { icon: FileText,    tag: "PDF/RAG",  title: "Document Intelligence", desc: "Analyze and query PDFs with vector search" },
+    { icon: Globe,       tag: "Search",   title: "Web Research",          desc: "Synthesize real-time data from the web" },
+    { icon: Brain,       tag: "Chat",     title: "Conversation",          desc: "Multi-turn intelligent dialogue" },
+    { icon: Presentation,tag: "PPT",      title: "Presentations",         desc: "Auto-generate slide decks" },
   ];
 
   return (
-    <div
-      className="flex-1 h-full overflow-y-auto px-4 md:px-8 py-6
-      [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-    >
-      {/* ── Zero-state Welcome Hero ── */}
-      {(!messages || messages?.length === 0) && !isLoading ? (
-        <div className="h-full max-w-2xl mx-auto flex flex-col items-center justify-center text-center px-4 py-8">
+    <div className="flex-1 h-full overflow-y-auto px-4 md:px-6 py-6">
+      {(!messages || messages.length === 0) && !shouldShowLoading ? (
+        <div className="h-full max-w-2xl mx-auto flex flex-col items-center justify-center text-center px-4">
           <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.3 }}
-            className="flex flex-col items-center gap-4"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+            className="flex flex-col items-center gap-5 w-full"
           >
-            {/* NovaMind Brand Logo */}
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-500 to-violet-600 flex items-center justify-center shadow-lg shadow-indigo-500/25">
-                <Sparkles size={20} className="text-white" />
+            {/* Logo */}
+            <div className="flex flex-col items-center gap-3">
+              <motion.div
+                className="logo-float w-14 h-14 rounded-2xl flex items-center justify-center"
+                style={{ background: "#8b5cf6", boxShadow: "0 8px 24px rgba(139,92,246,0.25)" }}
+              >
+                <Sparkles size={26} color="white" />
+              </motion.div>
+              <div>
+                <h1 className="text-2xl font-bold logo-text">NovaMind</h1>
+                <p className="text-sm mt-1" style={{ color: "#9c9590" }}>What do you want to build today?</p>
               </div>
-              <h1 className="text-2xl font-bold text-white tracking-tight">
-                NovaMind
-              </h1>
             </div>
 
-            {/* Capability Cards Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full mt-4 text-left">
-              {capabilityCards.map((card, idx) => {
-                const Icon = card.icon;
+            {/* Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full mt-2 text-left">
+              {cards.map((c, i) => {
+                const Icon = c.icon;
                 return (
-                  <div
-                    key={idx}
-                    className="group relative rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.05] p-4 transition-all duration-200 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 cursor-default"
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 * i }}
+                    className="p-4 rounded-xl cursor-default transition-all"
+                    style={{ background: "#fff", border: "1px solid #e8e6e1" }}
+                    onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#c4b5fd"; e.currentTarget.style.background = "#faf9ff"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#e8e6e1"; e.currentTarget.style.background = "#fff"; }}
                   >
                     <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform duration-200">
-                        <Icon size={12} />
+                      <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: "#f3f0ff" }}>
+                        <Icon size={12} style={{ color: "#8b5cf6" }} />
                       </div>
-                      <span className="text-[10.5px] font-semibold text-indigo-300 uppercase tracking-wider">
-                        {card.tag}
-                      </span>
+                      <span className="text-[10.5px] font-semibold uppercase tracking-wide" style={{ color: "#8b5cf6" }}>{c.tag}</span>
                     </div>
-                    <h3 className="text-[13px] font-semibold text-slate-200 group-hover:text-white">
-                      {card.title}
-                    </h3>
-                    <p className="text-[11.5px] text-slate-500 mt-0.5 leading-snug">
-                      {card.desc}
-                    </p>
-                  </div>
+                    <p className="text-[13px] font-semibold" style={{ color: "#1a1918" }}>{c.title}</p>
+                    <p className="text-[11.5px] mt-0.5 leading-snug" style={{ color: "#9c9590" }}>{c.desc}</p>
+                  </motion.div>
                 );
               })}
             </div>
           </motion.div>
         </div>
       ) : (
-        /* ── Active Conversation Stream ── */
-        <div className="max-w-4xl mx-auto space-y-6">
-          {messages?.map((msg, i) => (
-            <div key={msg?._id || i}>
-              <MessageBubble
-                role={msg?.role}
-                content={msg?.content}
-                images={msg?.images || []}
-              />
-            </div>
-          ))}
-          {isLoading && <LoadingAnimation />}
+        <div className="max-w-3xl mx-auto space-y-4">
+          <AnimatePresence>
+            {messages?.map((msg, i) => (
+              <motion.div
+                key={msg?._id || i}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <MessageBubble role={msg?.role} content={msg?.content} images={msg?.images || []} />
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {shouldShowLoading && <LoadingAnimation />}
           <div ref={bottomRef} />
         </div>
       )}
