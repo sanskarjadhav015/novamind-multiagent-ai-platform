@@ -18,8 +18,7 @@
 4. [The 8 Specialized Autonomous Agents](#-the-8-specialized-autonomous-agents)
 5. [Microservices Overview](#-microservices-overview)
 6. [Tech Stack](#-tech-stack)
-7. [Getting Started & Local Setup](#-getting-started--local-setup)
-8. [License & Author](#-license--author)
+7. [License & Author](#-license--author)
 
 ---
 
@@ -130,29 +129,6 @@ NovaMind automatically determines the exact runtime needed for any generated cod
 - **AI & Orchestration**: LangGraph (`@langchain/langgraph`), LangChain Core, Tavily Search, Google Generative AI Embeddings (`gemini-embedding-001`), DeepSeek-Chat, Google Gemini 3.6 Flash, Groq (`gpt-oss-120b`).
 - **Databases & Caching**: MongoDB (Mongoose ODM), Redis (`ioredis`), Qdrant Vector Database.
 - **Cloud, Storage & Payments**: AWS S3 (`@aws-sdk/client-s3`), Presigned URLs, Razorpay Orders API, Firebase Admin SDK, Docker.
-
----
-
-## 💻 Getting Started & Local Setup
-
-### Quick Start:
-
-```bash
-# 1. Start Redis
-docker run -d -p 6379:6379 --name novamind-redis redis:alpine
-
-# 2. Run Microservices
-cd NovaMind/backend/services/auth && node index.js     # Port 8001
-cd NovaMind/backend/services/chat && node index.js     # Port 8002
-cd NovaMind/backend/services/billing && node index.js  # Port 8004
-cd NovaMind/backend/services/agent && node index.js    # Port 8003
-cd NovaMind/backend/gateway && node index.js           # Port 8000
-
-# 3. Run Frontend
-cd NovaMind/frontend && npm run dev                    # Port 5173
-```
-
-Visit **[http://localhost:5173](http://localhost:5173)** in your browser.
 
 ---
 
