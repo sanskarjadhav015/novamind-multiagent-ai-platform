@@ -18,7 +18,7 @@
 4. [The 8 Specialized Autonomous Agents](#-the-8-specialized-autonomous-agents)
 5. [Microservices Overview](#-microservices-overview)
 6. [Tech Stack](#-tech-stack)
-7. [License & Author](#-license--author)
+7. [License & Author] .(#-license--author)
 
 ---
 
